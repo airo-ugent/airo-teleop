@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 from airo_teleop_devices.teleop_device import TeleopDevice
 import numpy as np
+import numpy.typing as npt
 
 
 @dataclass
-class TeleopConfig:
+class TeleopAgentConfig:
     use_joint_space: bool = True  # Expected to be handled in TeleopAgent.transform_func
-    use_deltas: bool | np.ndarray[np.bool_]  = False  # If bool, applies to all dimensions; if array, specifies per dimension
+    use_deltas: bool | npt.NDArray[np.bool]  = False  # If bool, applies to all dimensions; if array, specifies per dimension
 
 
 class TeleopAgent:
@@ -19,19 +20,19 @@ class TeleopAgent:
     Gello controls Mobi's manipulator, while Spacemouse controls the base. As it stands, this would require
     separate TeleopAgents for each device.
     '''
-    def __init__(self, config: TeleopConfig, teleop_device: TeleopDevice, transform_func=lambda x: x):
+    def __init__(self, config: TeleopAgentConfig, teleop_device: TeleopDevice, transform_func=lambda x: x):
         self.transform_func = transform_func
         self.config = config
-        self.teleop_device = teleop_device  # teleop_device is expected to have its transform_func set up properly (depending on e.g. TeleopConfig.use_joint_space)
+        self.teleop_device = teleop_device
 
-    def get_action(self, current_robot_state: np.ndarray[np.float_]=None) -> np.ndarray[np.float_]:
+    def get_action(self, current_robot_state: npt.NDArray[np.float64] | None = None) -> npt.NDArray[np.float64]:
         teleop_device_state = self.teleop_device.get_raw_state()
         action = self.transform_func(teleop_device_state)
         if np.array(self.config.use_deltas).any():
             assert current_robot_state is not None, "current_robot_state must be provided when using delta actions."
             assert current_robot_state.shape == action.shape, "Shape of current_robot_state must match shape of teleop device output."
             if isinstance(self.config.use_deltas, bool):
-                return action - current_robot_state  # Outer if statement implies self.config.use_deltas == True
+                return action - current_robot_state
             else:
                 assert self.config.use_deltas.shape == current_robot_state.shape, "Shape of TeleopConfig.use_deltas must match shape of current_robot_state."
                 return np.where(self.config.use_deltas, action - current_robot_state, action)

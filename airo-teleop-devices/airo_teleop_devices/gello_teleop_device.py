@@ -8,7 +8,7 @@ from airo_teleop_devices.drivers.dynamixel_robot import DynamixelRobot, Dynamixe
 from airo_teleop_devices.teleop_device import TeleopDevice
 
 
-class GelloTeleop(TeleopDevice):
+class GelloTeleopDevice(TeleopDevice):
     def __init__(self, port: str, dynamixel_config: DynamixelConfig, 
                  gripper_config: Optional[Tuple[int, float, float]]=None):
         """
@@ -24,7 +24,7 @@ class GelloTeleop(TeleopDevice):
         joint_state = self.robot.get_joint_state()
         if self.gripper_config is not None:
             gripper_id, gripper_open, gripper_close = self.gripper_config
-            gripper_index = self.robot._joint_ids.index(gripper_id)
+            gripper_index = list(self.robot._joint_ids).index(gripper_id)
             gripper_pos = joint_state[gripper_index]
             # map gripper_pos from [gripper_open, gripper_close] to [0, 1]
             gripper_pos_mapped = (gripper_pos - gripper_open) / (gripper_close - gripper_open)
@@ -39,9 +39,10 @@ class GelloTeleop(TeleopDevice):
         parameter when initializing the GelloTeleop class.
         :param gripper_id: ID of the dynamixel servo controlling the Gello trigger
         """
+        gripper_idx = list(self.robot._joint_ids).index(gripper_id)
         input("Please release the trigger and press Enter to continue...")
-        open_pos = self.robot.get_joint_state()[self.robot._joint_ids.index(gripper_id)]
+        open_pos = self.robot.get_joint_state()[gripper_idx]
         input("Please pull the trigger fully and press Enter to continue...")
-        close_pos = self.robot.get_joint_state()[self.robot._joint_ids.index(gripper_id)]
+        close_pos = self.robot.get_joint_state()[gripper_idx]
         self.gripper_config = (gripper_id, open_pos, close_pos)
         logger.info(f"Gripper calibrated: open_pos={open_pos}, close_pos={close_pos}")
