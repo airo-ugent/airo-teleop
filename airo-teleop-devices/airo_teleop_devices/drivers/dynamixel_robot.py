@@ -25,7 +25,7 @@ class DynamixelRobot:
         port: str = "/dev/ttyUSB0",
         baudrate: int = 57600,
     ):
-        from dynamixel_driver import (
+        from airo_teleop_devices.drivers.dynamixel_driver import (
             DynamixelDriver,
             DynamixelDriverProtocol,
             FakeDynamixelDriver,

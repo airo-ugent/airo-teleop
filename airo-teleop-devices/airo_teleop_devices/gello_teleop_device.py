@@ -1,9 +1,11 @@
-from airo_teleop_devices.teleop_device import TeleopDevice
-from airo_teleop_devices.drivers.dynamixel_robot import DynamixelRobot, DynamixelConfig
+from typing import Optional, Tuple
+
+from loguru import logger
 import numpy as np
 import numpy.typing as npt
-from typing import Optional, Tuple
-from loguru import logger
+
+from airo_teleop_devices.drivers.dynamixel_robot import DynamixelRobot, DynamixelConfig
+from airo_teleop_devices.teleop_device import TeleopDevice
 
 
 class GelloTeleop(TeleopDevice):
@@ -43,18 +45,3 @@ class GelloTeleop(TeleopDevice):
         close_pos = self.robot.get_joint_state()[self.robot._joint_ids.index(gripper_id)]
         self.gripper_config = (gripper_id, open_pos, close_pos)
         logger.info(f"Gripper calibrated: open_pos={open_pos}, close_pos={close_pos}")
-
-
-if __name__ == "__main__":
-    dynamixel_config = DynamixelConfig(
-        joint_ids=[1, 2, 3, 4, 5, 6, 7],
-        joint_offsets=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-        joint_signs=[1, 1, -1, 1, 1, 1, 1],
-        start_joints=None,
-    )
-    device = GelloTeleop(dynamixel_config=dynamixel_config, gripper_config=(7, 194, 152), 
-                         port="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT792DZ5-if00-port0")
-    device.calibrate_trigger(gripper_id=7)
-    while True:
-        gello_joints = device.get_raw_state()
-        print(gello_joints)
