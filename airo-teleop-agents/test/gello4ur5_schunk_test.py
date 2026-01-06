@@ -1,5 +1,4 @@
 from airo_teleop_agents.gello_teleop_agents import Gello4UR5_Schunk
-from airo_teleop_agents.teleop_agent import TeleopAgentConfig
 import time
 from loguru import logger
 from airo_robots.manipulators.hardware.ur_rtde import URrtde
@@ -16,12 +15,10 @@ CONTROL_ROBOT = True  # If True, will command the UR5 robot & Schunk; if False, 
 
 
 loop_delay = 0.05  # seconds
-input("Hold gello in similar pose as robot and press Enter to continue...")
-ur_start_joints = ur5.get_joint_configuration()
-teleop_agent = Gello4UR5_Schunk(config=TeleopAgentConfig(use_joint_space=USE_JOINT_SPACE, use_deltas=USE_DELTAS),
+teleop_agent = Gello4UR5_Schunk(use_joint_space=USE_JOINT_SPACE,
                 gello_usb_port="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT792DZ5-if00-port0",
                 gello_trigger_range=gello_trigger_range,
-                ur_start_joints=ur_start_joints)
+                ur_robot=ur5)
 if USE_JOINT_SPACE:
     if CONTROL_ROBOT:  # Slowly move to start position
         action = teleop_agent.get_action()
