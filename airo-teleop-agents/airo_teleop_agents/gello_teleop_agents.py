@@ -44,7 +44,6 @@ class Gello4UR(TeleopAgent):
             # Joint mapping should already be set up by the dynamixel_config
             def transform_func(raw_data: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]: # type: ignore
                 teleop_action = raw_data.copy()
-                # teleop_action[6] is the gripper mapped to [0, 1], with 0 = fully open, 1 = fully closed
                 return teleop_action[:6]
         else:
             forward_kinematics_dict = {
@@ -58,7 +57,6 @@ class Gello4UR(TeleopAgent):
                 teleop_action = raw_data.copy()
                 joint_positions = teleop_action[:6]
                 ee_pose = fk_function(*joint_positions)
-                # teleop_action[6] is the gripper mapped to [0, 1], with 0 = fully open, 1 = fully closed
                 return ee_pose
         return transform_func
 
