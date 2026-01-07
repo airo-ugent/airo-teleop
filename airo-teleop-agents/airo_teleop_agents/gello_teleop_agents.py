@@ -33,7 +33,7 @@ class Gello4UR(TeleopAgent):
 
     def _init_gello_device(self) -> GelloTeleopDevice:
         input(f"[{self.__class__.__name__}._init_gello_device] Hold gello in similar pose as robot and press Enter to continue...")
-        ur_start_joints = self.ur_robot.get_joint_configuration()
+        ur_start_joints = np.append(self.ur_robot.get_joint_configuration(), 0.0)  # Append 0.0 for gripper joint
         self.gello_config.dynamixel_config.start_joints = ur_start_joints
         gello = GelloTeleopDevice(gello_config=self.gello_config, port=self.gello_usb_port)
         return gello
