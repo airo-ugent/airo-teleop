@@ -3,6 +3,7 @@ from threading import Event, Lock, Thread
 from typing import Protocol, Sequence
 
 import numpy as np
+import numpy.typing as npt
 from dynamixel_sdk.group_sync_read import GroupSyncRead
 from dynamixel_sdk.group_sync_write import GroupSyncWrite
 from dynamixel_sdk.packet_handler import PacketHandler
@@ -63,7 +64,7 @@ class DynamixelDriverProtocol(Protocol):
 
 
 class FakeDynamixelDriver(DynamixelDriverProtocol):
-    def __init__(self, ids: Sequence[int]):
+    def __init__(self, ids: npt.NDArray[np.int8]):
         self._ids = ids
         self._joint_angles = np.zeros(len(ids), dtype=int)
         self._torque_enabled = False
@@ -89,11 +90,11 @@ class FakeDynamixelDriver(DynamixelDriverProtocol):
 
 
 class DynamixelDriver(DynamixelDriverProtocol):
-    def __init__(self, ids: Sequence[int], port: str = "/dev/ttyUSB0", baudrate: int = 57600):
+    def __init__(self, ids: npt.NDArray[np.int8], port: str = "/dev/ttyUSB0", baudrate: int = 57600):
         """Initialize the DynamixelDriver class.
 
         Args:
-            ids (Sequence[int]): A list of IDs for the Dynamixel servos.
+            ids (npt.NDArray[np.int8]): A list of IDs for the Dynamixel servos.
             port (str): The USB port to connect to the arm.
             baudrate (int): The baudrate for communication.
         """

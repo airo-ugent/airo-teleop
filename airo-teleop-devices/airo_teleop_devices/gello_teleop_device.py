@@ -35,7 +35,7 @@ class GelloTeleopDevice(TeleopDevice):
                 joint_ids=np.array([1, 2, 3, 4, 5, 6, 7]),
                 joint_offsets=np.array([40, 16, 25, 40, 15, 16, 0]) * np.pi / 16,
                 joint_signs=np.array([1, 1, -1, 1, 1, 1, 1]),
-                start_joints=np.array([0]*7)
+                start_joints=None
             ),
             gripper_config=(7, -2.7642947390014405, -3.749831989386644)
         )
@@ -43,7 +43,7 @@ class GelloTeleopDevice(TeleopDevice):
                 joint_ids=np.array([1, 2, 3, 4, 5, 6, 7]),
                 joint_offsets=np.array([4*np.pi/2, 2*np.pi/2, 0*np.pi/2, -3*np.pi/2, 2*np.pi/2, 7*np.pi/2, 0]),
                 joint_signs=np.array([1, 1, -1, 1, 1, 1, 1]),
-                start_joints=np.array([0]*7)
+                start_joints=None
             ),
             gripper_config=(7, -2.879793277, -3.595378259)
         )
@@ -56,8 +56,11 @@ class GelloTeleopDevice(TeleopDevice):
         and gripper_config.
         """
         super().__init__()
-        self.gripper_config = gello_config.gripper_config
+        if gello_config.dynamixel_config.start_joints is not None:
+            # Append 0.0 as start for gripper joint
+            gello_config.dynamixel_config.start_joints = np.concatenate((gello_config.dynamixel_config.start_joints, [0.0]))
         self.dynamixel_config = gello_config.dynamixel_config
+        self.gripper_config = gello_config.gripper_config
         self.robot = DynamixelRobot(dynamixel_config=gello_config.dynamixel_config, port=port, real=True, baudrate=57600)
 
     def get_raw_state(self) -> npt.NDArray[np.float64]:

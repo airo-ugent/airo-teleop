@@ -1,8 +1,7 @@
 from airo_teleop_agents.teleop_agent import TeleopAgent
 from airo_teleop_devices.gello_teleop_device import GelloTeleopDevice, GelloConfig
 from airo_robots.manipulators.hardware.ur_rtde import URrtde
-from airo_robots.grippers.hardware.parallel_position_gripper import ParallelPositionGripper
-from airo_teleop_devices.drivers.dynamixel_robot import DynamixelConfig
+from airo_robots.grippers.parallel_position_gripper import ParallelPositionGripper
 from airo_typing import HomogeneousMatrixType
 from loguru import logger
 import numpy.typing as npt
@@ -33,7 +32,7 @@ class Gello4UR(TeleopAgent):
         super().__init__(teleop_device=gello, transform_func=transform_func)
 
     def _init_gello_device(self) -> GelloTeleopDevice:
-        input("[Gello4UR_ParallelGripper._init_gello_device] Hold gello in similar pose as robot and press Enter to continue...")
+        input(f"[{self.__class__.__name__}._init_gello_device] Hold gello in similar pose as robot and press Enter to continue...")
         ur_start_joints = self.ur_robot.get_joint_configuration()
         self.gello_config.dynamixel_config.start_joints = ur_start_joints
         gello = GelloTeleopDevice(gello_config=self.gello_config, port=self.gello_usb_port)
@@ -98,7 +97,6 @@ class Gello4UR_ParallelGripper(Gello4UR):
                 joint_action = super_transform_func(raw_data)
                 # Map gripper from [0, 1] to [max_width, min_width]
                 gripper_action = self.gripper_opening_range[0] + (self.gripper_opening_range[1] - self.gripper_opening_range[0]) * (1 - raw_data[6])
-                #concatenate joint action and gripper action
                 teleop_action = np.concatenate((joint_action, [gripper_action]))
                 return teleop_action
         else:

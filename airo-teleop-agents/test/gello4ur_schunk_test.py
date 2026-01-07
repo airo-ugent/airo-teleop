@@ -9,7 +9,7 @@ import numpy as np
 
 #=============Test configuration==================#
 ur = URrtde(ip_address="10.42.0.162")
-schunk = SchunkGripperProcess(usb_interface="todo")
+schunk = SchunkGripperProcess(usb_interface="/dev/serial/by-path/pci-0000:00:14.0-usb-0:13.3:1.0-port0,12,115200,8E1")
 
 # Your physical Gello teleop device is labeled with either "Gello1" or "Gello2", 
 # choose the according default config here or provide your own GelloConfig. For (re)calibrating
@@ -35,10 +35,11 @@ if USE_JOINT_SPACE:
     while True:
         action = teleop_agent.get_action()
         if CONTROL_ROBOT:
-            ur.servo_to_joint_configuration(action[:6], duration=loop_delay).wait()
+            awaitable = ur.servo_to_joint_configuration(action[:6], duration=loop_delay)
             schunk.move(width=action[6])
+            awaitable.wait()
         logger.info(f"action={np.array2string(action, precision=3, suppress_small=True, floatmode='fixed')}")
-        time.sleep(loop_delay)
+        #time.sleep(loop_delay)
 else:  # Tool space
     if CONTROL_ROBOT:  # Slowly move to start position
         ee_pose, gripper_action = teleop_agent.get_action()
@@ -47,7 +48,8 @@ else:  # Tool space
     while True:
         ee_pose, gripper_action = teleop_agent.get_action()
         if CONTROL_ROBOT:
-            ur.servo_to_tcp_pose(ee_pose, duration=loop_delay).wait()
+            awaitable = ur.servo_to_tcp_pose(ee_pose, duration=loop_delay)
             schunk.move(width=gripper_action)
+            awaitable.wait()
         logger.info(f"action={ee_pose}, gripper={gripper_action}")
-        time.sleep(loop_delay)
+        #time.sleep(loop_delay)

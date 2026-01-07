@@ -3,6 +3,7 @@ import numpy as np
 import numpy.typing as npt
 from typing import Dict, Optional, List
 from loguru import logger
+from airo_teleop_devices.drivers.dynamixel_driver import DynamixelDriver, FakeDynamixelDriver
 
 
 @dataclass
@@ -19,20 +20,23 @@ class DynamixelConfig:
 class DynamixelRobot:
     """A class representing a dynamixel robot."""
 
-    def __init__(
-        self,
-        dynamixel_config: DynamixelConfig,
-        real: bool = True,
-        port: str = "/dev/ttyUSB0",
-        baudrate: int = 57600,
-    ):
-        from airo_teleop_devices.drivers.dynamixel_driver import (
-            DynamixelDriver,
-            FakeDynamixelDriver,
-        )
+    def __init__(self,
+            dynamixel_config: DynamixelConfig,
+            real: bool = True,
+            port: str = "/dev/ttyUSB0",
+            baudrate: int = 57600):
+        self._torque_on = False
+        self._last_pos = None
+        self._alpha = 0.99
+        self._joint_ids = dynamixel_config.joint_ids
+        logger.debug(f"Attempting to connect to port: {port}")
+        if real:
+            self._driver = DynamixelDriver(self._joint_ids, port=port, baudrate=baudrate)
+            self._driver.set_torque_mode(False)
+        else:
+            self._driver = FakeDynamixelDriver(self._joint_ids)
 
         self.dynamixel_config = dynamixel_config
-        self._joint_ids = dynamixel_config.joint_ids
         joint_signs = dynamixel_config.joint_signs
         if joint_signs is None:
             self._joint_signs = np.ones(len(self._joint_ids))
@@ -46,17 +50,6 @@ class DynamixelRobot:
             f"joint_ids: {len(self._joint_ids)}, " f"joint_signs: {len(self._joint_signs)}"
         )
         assert np.all(np.abs(self._joint_signs) == 1), f"joint_signs: {self._joint_signs}"
-
-        logger.debug(f"Attempting to connect to port: {port}")
-        if real:
-            self._driver = DynamixelDriver(self._joint_ids, port=port, baudrate=baudrate)
-            self._driver.set_torque_mode(False)
-        else:
-            self._driver = FakeDynamixelDriver(self._joint_ids)
-
-        self._torque_on = False
-        self._last_pos = None
-        self._alpha = 0.99
 
     def init_joint_offsets(self) -> None:
         joint_ids = self.dynamixel_config.joint_ids
@@ -72,7 +65,7 @@ class DynamixelRobot:
             # loop through all joints and add +- 2pi to the joint offsets to get the closest to start joints
             current_joints = self.get_joint_state()
             new_joint_offsets = np.zeros(np.array(current_joints).shape)
-            assert len(current_joints) == len(start_joints)
+            assert len(current_joints) == len(start_joints), f"current_joints: {len(current_joints)}, start_joints: {len(start_joints)}"
             for idx, (c_joint, s_joint, joint_offset) in enumerate(
                 zip(current_joints, start_joints, self._joint_offsets)
             ):
