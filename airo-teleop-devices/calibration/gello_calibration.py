@@ -20,5 +20,5 @@ input("Calibration done, you can copy-paste the calibration values. " \
 "Press Enter to start reading calibrated gello values...")
 while True:
     gello_joints = np.array(device.get_raw_state())
-    logger.debug(f"gello_joints={gello_joints.round(3)}")
+    logger.debug(f"joints [°]: {(gello_joints[:6]*180/np.pi).round(3)}, trigger [open=0, close=1]: {gello_joints[6].round(3)}")
     time.sleep(0.05)

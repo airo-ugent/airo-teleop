@@ -118,6 +118,6 @@ class GelloTeleopDevice(TeleopDevice):
                     best_offset = offset
             best_offsets.append(best_offset)
         self.dynamixel_config.joint_offsets[:6] = np.array(best_offsets)
-        self.robot.dynamixel_config.joint_offsets = np.array(best_offsets)
-        self.robot.init_joint_offsets()
+        self.robot.dynamixel_config.joint_offsets[:6] = np.array(best_offsets)
+        self.robot.init_joint_offsets()  # re-initialize offsets to account for start_joints
         logger.info(f"Joint offsets calibrated: {self.dynamixel_config.joint_offsets}")
