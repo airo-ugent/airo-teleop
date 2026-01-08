@@ -7,6 +7,8 @@ The packages in this repo are not yet on pypi, to use them:
 * In your environment, run `pip install -e <path-to-repo-clone>/airo-teleop-devices` (Analogous for airo-teleop-agents.)
 * In your environment, run `pip install -r <path-to-repo-clone>/airo-teleop-devices/requirements.txt` (Analogous for airo-teleop-agents.)
 
+---
+
 > Everything below this is **auto-generated** from `airo-teleop-agents/README.md` and `airo-teleop-devices/README.md`.
 > To update it, edit those files and run `python scripts/generate_readme.py` locally, or rely on the GitHub Action which will regenerate this README automatically on changes.
 
