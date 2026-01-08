@@ -6,10 +6,10 @@ This package provides readout of multiple teleop systems. The philisophy of this
 Installation is described on [this webpage](https://spacemouse.kubaandrysek.cz/#dependencies-required).
 For Ubuntu:
 ```
-§ sudo apt-get install libhidapi-dev`
-§ echo 'KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"' | sudo tee /etc/udev/rules.d/99-hidraw-permissions.rules`
-§ sudo usermod -aG plugdev $USER`
-§ newgrp plugdev`
+sudo apt-get install libhidapi-dev`
+echo 'KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"' | sudo tee /etc/udev/rules.d/99-hidraw-permissions.rules`
+sudo usermod -aG plugdev $USER`
+newgrp plugdev`
 ```
 and restart your computer.
 
