@@ -7,7 +7,7 @@ from airo_teleop_devices.gello_teleop_device import GelloTeleopDevice
 import numpy as np
 
 
-#=============Test configuration==================#
+#=============Example configuration==================#
 ur = URrtde(ip_address="10.42.0.162")
 schunk = SchunkGripperProcess(usb_interface="/dev/serial/by-path/pci-0000:00:14.0-usb-0:13.3:1.0-port0,12,115200,8E1")
 

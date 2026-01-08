@@ -1,5 +1,5 @@
 from airo_teleop_agents.teleop_agent import TeleopAgent
-from airo_robots.manipulators.position_manopulator import PositionManipulator
+from airo_robots.manipulators.position_manipulator import PositionManipulator
 from airo_robots.grippers.parallel_position_gripper import ParallelPositionGripper
 from airo_teleop_devices.spacemouse_teleop_device import SpaceMouseTeleopDevice
 from airo_typing import HomogeneousMatrixType
@@ -14,7 +14,7 @@ class SpaceMouse4PositionManipulator(TeleopAgent):
                  translation_scale: float = 0.02, 
                  rotation_scale: float = 0.02, 
                  deadzone: Tuple[float, float]=(0.1, 0.1), 
-                 enabled_axes: list[bool]=[True]*6):
+                 enabled_axes: list[bool]=[True]*6 + [False]*2):
         """
         Teleop agent using a SpaceMouse to control a PositionManipulator in tool space.
         Teleop agent using a SpaceMouse to control a PositionManipulator in tool space and a ParallelPositionGripper.
@@ -29,10 +29,13 @@ class SpaceMouse4PositionManipulator(TeleopAgent):
         :param deadzone: (translation, rotation) deadzone values. If output of spacemouse is below this value, 
             it is set to 0.
         :param enabled_axes: Boolean array detailing which SpaceMouse axes are enabled. This allows e.g. to only teleop translations. 
-            Can be set dynamically (simply do SpaceMouse4PositionManipulator.enabled_axes = new_setting).
+            Can be set dynamically (simply do SpaceMouse4PositionManipulator.enabled_axes = new_setting). 
+            By default, last two axes disabled because these are the buttons that would typically contorl a gripper.
+            The value of the last two elements of enabled_axes, however, doesn't actually matter, the button 
+            state is simply not used in the transform function of this TeleopAgent.
         """
         self.position_manipulator = position_manipulator
-        self.enable_axes = enabled_axes
+        self.enabled_axes = enabled_axes
         self.translation_scale = translation_scale
         self.rotation_scale = rotation_scale
         spacemouse_device = SpaceMouseTeleopDevice(deadzone=deadzone)
@@ -57,9 +60,8 @@ class SpaceMouse4PositionManipulator(TeleopAgent):
             current_rotation_matrix = current_pose[:3, :3]
 
             new_translation = current_translation + translation_delta
-            # rotation is now interpreted as euler and not as rotvec
-            # similar to Diffusion Policy.
-            # however, rotvec seems more principled (related to twist)
+            # Rotation is now interpreted as euler and not as rotvec similar to Diffusion Policy.
+            # However, rotvec seems more principled (related to twist)
             new_rotation_matrix = scpRotation.from_euler("xyz", rpy_delta).as_matrix() @ current_rotation_matrix
             new_pose = np.eye(4)
             new_pose[:3, :3] = new_rotation_matrix
@@ -69,7 +71,7 @@ class SpaceMouse4PositionManipulator(TeleopAgent):
         return transform_func
     
     def get_enable_axes(self) -> list[bool]:
-        return self.enable_axes
+        return self.enabled_axes
     
 
 class SpaceMouse4PositionManipulator_ParallelGripper(SpaceMouse4PositionManipulator):
@@ -80,7 +82,7 @@ class SpaceMouse4PositionManipulator_ParallelGripper(SpaceMouse4PositionManipula
                  rotation_scale: float=0.02, 
                  gripper_step_size: float | None=0.01,
                  deadzone: Tuple[float, float]=(0.1, 0.1), 
-                 enable_axes: list[bool]=[True]*8):
+                 enabled_axes: list[bool]=[True]*8):
         """
         Teleop agent using a SpaceMouse to control a PositionManipulator in tool space and a ParallelPositionGripper.
         TODO: currently, the speed of the teleoperated robot will depend on the loop frequency with which this TeleopAgent is polled:
@@ -106,16 +108,19 @@ class SpaceMouse4PositionManipulator_ParallelGripper(SpaceMouse4PositionManipula
                  translation_scale=translation_scale, 
                  rotation_scale=rotation_scale, 
                  deadzone=deadzone, 
-                 enabled_axes=enable_axes[:6])
+                 enabled_axes=enabled_axes)
         
     def _build_transform_func(self) -> Callable:
         super_transform_func = super()._build_transform_func()
         def transform_func(raw_data) -> Tuple[HomogeneousMatrixType, float]:
             manipulator_action = super_transform_func(raw_data)
-            gripper_action = 0
+            raw_data = np.where(self.get_enable_axes(), raw_data, 0)
+            current_gripper_opening = self.gripper.get_current_width()
             if raw_data[6]:
-                gripper_action = -self.gripper_step_size if self.gripper_step_size is not None else self.gripper.gripper_specs.min_width
+                new_gripper_opening = current_gripper_opening - self.gripper_step_size if self.gripper_step_size is not None else self.gripper.gripper_specs.min_width
             elif raw_data[7]:
-                gripper_action = self.gripper_step_size if self.gripper_step_size is not None else self.gripper.gripper_specs.max_width
-            return manipulator_action, gripper_action
+                new_gripper_opening = current_gripper_opening + self.gripper_step_size if self.gripper_step_size is not None else self.gripper.gripper_specs.max_width
+            else:
+                new_gripper_opening = current_gripper_opening
+            return manipulator_action, new_gripper_opening
         return transform_func

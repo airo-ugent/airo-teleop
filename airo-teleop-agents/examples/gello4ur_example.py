@@ -6,7 +6,7 @@ from airo_teleop_devices.gello_teleop_device import GelloTeleopDevice, GelloConf
 import numpy as np
 
 
-#=============Test configuration==================#
+#=============Example configuration==================#
 ur = URrtde(ip_address="10.42.0.162")
 
 # Your physical Gello teleop device is labeled with either "Gello1" or "Gello2", 
