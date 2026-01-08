@@ -1,4 +1,4 @@
-# AIRO teleop
+# IDLab-AIRO Teleop
 This repo contains two packages to enable teleoperation of (a.o.) robot systems at IDLab-AIRO. The first, airo-teleop-devices, abstracts away driver code and gives "uninterpreted" output of the teleoperation systems. The second, airo-teleop-agents, makes use of airo-teleop-devices and provides common bindings between the outputs of the teleoperation systems and robot hardware used at IDLab-AIRO. Keeping the "uninterpreted" teleop systems in a separate package allows to deploy them quickly for purposes beyond common robot manipulation experiments.
 
 > Everything below this is **auto-generated** from `airo-teleop-agents/README.md` and `airo-teleop-devices/README.md`.
