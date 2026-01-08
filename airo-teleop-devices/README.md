@@ -13,3 +13,5 @@ For Ubuntu:
 and restart your computer.
 
 `ValueError: Could not open SpaceMouse: Failed to open device` is known to be solved by unplugging and replugging the spacemouse in the USB port, or by trying a different USB port and going back to the first.
+
+TESTESTES
