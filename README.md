@@ -23,7 +23,7 @@ The packages in this repo are not yet on pypi, to use them:
 This package provides readout of multiple teleop systems. The philisophy of this package is to provide readout of the raw teleop dimensions, abstracting away the driver code. This way, the teleop systems can also be deployed for purposes beyond robot manipulators, without including the dependency on e.g. airo-mono. The package airo-teleop-agents uses airo-teleop-devices to define specialised, ready to use teleop agents, that additionally map the raw teleop readouts to usable robot actions.
 
 ## Gello
-[Gello teleoperation arms](https://wuphilipp.github.io/gello_site/) are kinematic copies of the robot arms they are intended to control. This allows to copy over joint positions and hence control directly in joint space.
+[Gello teleoperation arms](https://wuphilipp.github.io/gello_site/) are kinematic copies of the robot arms they are intended to control. This allows to copy over joint positions and hence control directly in joint space. They use Dynamixel motors and do not require any installation steps beyond installing the pip requirements of this package.
 
 ## SpaceMouse
 The [SpaceMouse](https://3dconnexion.com/br/spacemouse/) is a desktop device that captures 3D forces and torques, featuring also a set of buttons. This device is particularly suited for control in tool space.
