@@ -1,6 +1,11 @@
 # IDLab-AIRO Teleop
 This repo contains two packages to enable teleoperation of (a.o.) robot systems at IDLab-AIRO. The first, airo-teleop-devices, abstracts away driver code and gives "uninterpreted" output of the teleoperation systems. The second, airo-teleop-agents, makes use of airo-teleop-devices and provides common bindings between the outputs of the teleoperation systems and robot hardware used at IDLab-AIRO. Keeping the "uninterpreted" teleop systems in a separate package allows to deploy them quickly for purposes beyond common robot manipulation experiments.
 
+## Installation
+The packages in this repo are not yet on pypi, to use them:
+* Clone the repo
+* In your environment, run `pip install -e <path-to-repo-clone>/airo-teleop-devices` and `pip install -r <path-to-repo-clone>/airo-teleop-devices/requirements.txt`. (Analogous for airo-teleop-agents.)
+
 > Everything below this is **auto-generated** from `airo-teleop-agents/README.md` and `airo-teleop-devices/README.md`.
 > To update it, edit those files and run `python scripts/generate_readme.py` locally, or rely on the GitHub Action which will regenerate this README automatically on changes.
 
