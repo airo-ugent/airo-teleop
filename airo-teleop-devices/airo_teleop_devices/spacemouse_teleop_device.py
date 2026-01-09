@@ -10,9 +10,6 @@ import numpy.typing as npt
 
 
 class SpaceMouseTeleopDevice(TeleopDevice):
-
-    ACTION_SPEC = None
-
     def __init__(self, deadzone: Tuple[float, float]=(0.1, 0.1)):
         """
         Args:
