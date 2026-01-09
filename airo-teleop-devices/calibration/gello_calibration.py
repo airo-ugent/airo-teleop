@@ -5,9 +5,12 @@ import numpy as np
 
 from airo_teleop_devices.gello_teleop_device import GelloTeleopDevice
 
-#=============Test configuration==================#
+# Place a UR arm in a known start joint pose and enter the joints in start_joints [radians]
+# Hold your Gello in the same pose as accurately as possible (this will also be prompted by device.calibrate_joint_offsets()).
+
+
+#=============Configuration==================#
 port = "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT792DZ5-if00-port0"
-# Place the UR arm in a known start joint pose and enter the joints here [radians]
 start_joints = np.array([0.0, -np.pi/2, np.pi/2, -np.pi/2, -np.pi/2, 0.0, 0.0]) 
 #=================================================#
 
