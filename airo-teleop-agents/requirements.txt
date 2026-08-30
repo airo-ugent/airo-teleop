@@ -4,3 +4,6 @@ ur_analytic_ik
 airo_typing
 airo_robots
 scipy
+rerun-sdk
+hebi-py
+teleop

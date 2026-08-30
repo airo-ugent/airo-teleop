@@ -2,3 +2,4 @@ dynamixel_sdk
 loguru
 numpy
 pyspacemouse
+lerobot[phone]
