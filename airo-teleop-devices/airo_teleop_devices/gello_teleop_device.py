@@ -61,7 +61,8 @@ class GelloTeleopDevice(TeleopDevice):
         self.robot = DynamixelRobot(dynamixel_config=gello_config.dynamixel_config, port=port, real=True, baudrate=57600)
 
     def get_raw_state(self) -> npt.NDArray[np.float64]:
-        joint_state = self.robot.get_joint_state()
+        # copy: get_joint_state returns its smoothing state, which must not be overwritten with the mapped trigger value
+        joint_state = self.robot.get_joint_state().copy()
         if self.gripper_config is not None:
             gripper_id, gripper_open, gripper_close = self.gripper_config
             gripper_index = list(self.robot._joint_ids).index(gripper_id)
