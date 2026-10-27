@@ -4,4 +4,6 @@ This package provides common bindings between teleop devices (airo-teleop-device
 
 Executing the action that a TeleopAgent returns is done outside of the scope of the TeleopAgent class. This is because the user must be free to use different movement commands (e.g. high frequency servoing vs discrete, low frequency moves), to change the order of the UR and gripper move command, to decide whether to .wait() for a gripper and/or UR command, ... .
 
+The SpaceMouse agents take an `action_mode`: `"absolute"` (default) returns the new TCP pose (and gripper width), `"delta"` returns the step itself as `[dx, dy, dz, drx, dry, drz(, dgripper)]` and needs no robot connection, e.g. for recording delta-action datasets.
+
 Phone teleoperation (iOS/Android) is available via `Phone4PositionManipulator`. See `examples/phone4ur_example.py`. Requires `lerobot[phone]`.
