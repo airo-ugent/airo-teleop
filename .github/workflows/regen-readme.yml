@@ -9,11 +9,6 @@ on:
       - 'airo-teleop-agents/**'
       - 'airo-teleop-devices/**'
       - 'scripts/generate_readme.py'
-  pull_request:
-    paths:
-      - 'airo-teleop-agents/**'
-      - 'airo-teleop-devices/**'
-      - 'scripts/generate_readme.py'
 
 jobs:
   regen:
