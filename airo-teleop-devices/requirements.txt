@@ -2,4 +2,6 @@ dynamixel_sdk
 loguru
 numpy
 pyspacemouse
+scipy
+pure-python-adb
 lerobot[phone]
