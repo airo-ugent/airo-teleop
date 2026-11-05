@@ -39,7 +39,7 @@ class MetaQuestReader:
         self,
         ip_address: str | None = None,
         port: int = 5555,
-        APK_name: str = "com.rail.oculus.teleop",
+        APK_name: str = "com.rail.oculus.teleop.v2",
         run: bool = True,
         axis_mask: list[int] | None = None,
     ) -> None:
@@ -48,7 +48,8 @@ class MetaQuestReader:
         Args:
             ip_address: IP address to the device. If None, USB connection is used.
             port: Port number for connection. Defaults to 5555.
-            APK_name: Android package name. Defaults to "com.rail.oculus.teleop".
+            APK_name: Android package name. Defaults to "com.rail.oculus.teleop.v2" (room-fixed controller poses;
+                the original "com.rail.oculus.teleop" streams them relative to the headset).
             run: Whether to start reader immediately. Defaults to True.
             axis_mask: Mask for axes [x, y, z, roll, pitch, yaw]. 1 = enabled, 0 = disabled.
                        Masked axes (x, y, z, roll, pitch, yaw) will be zeroed.
@@ -131,7 +132,8 @@ class MetaQuestReader:
         """Start reading data from the Meta Quest device."""
         self.running = True
         self.device.shell(
-            'am start -n "com.rail.oculus.teleop/com.rail.oculus.teleop.MainActivity" '
+            # launch the configured package (e.g. the .v2 APK), whose activity class keeps the original name
+            f'am start -n "{self.APK_name}/com.rail.oculus.teleop.MainActivity" '
             "-a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
         )
         serial = self.device.serial

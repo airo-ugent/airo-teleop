@@ -32,4 +32,6 @@ sudo usermod -aG plugdev $USER    # re-login, then replug the headset
 ```
 and restart `adb` (kill-server/start-server) if the device stays invisible after replugging.
 
+Use the `com.rail.oculus.teleop.v2` app (the default): it streams controller poses fixed in the room. The original `com.rail.oculus.teleop` streams them relative to the headset, so turning your head moves a teleoperated robot even when your hand is still. Only the app in front on the headset streams; `adb shell am force-stop com.rail.oculus.teleop` stops the old one.
+
 Verify with `python -m airo_teleop_devices.vr_teleop_device`: put the headset on and the I/O readout streams; while it is not ready, the printed message says which stage is missing.

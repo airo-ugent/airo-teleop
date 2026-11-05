@@ -68,7 +68,7 @@ class VrTeleopDevice(TeleopDevice):
         self,
         ip_address: str | None = None,
         port: int = 5555,
-        apk_name: str = "com.rail.oculus.teleop",
+        apk_name: str = "com.rail.oculus.teleop.v2",
         axis_mask: list[int] | None = None,
         max_pose_age: float = 0.5,
         auto_connect: bool = True,
@@ -77,7 +77,9 @@ class VrTeleopDevice(TeleopDevice):
         Args:
             ip_address: IP of the headset for network adb; None (default) uses USB.
             port: adb port used for the network connection.
-            apk_name: package name of the teleop app to launch/read.
+            apk_name: package name of the teleop app to launch/read. The .v2 app (default) streams controller poses
+                fixed in the room; the original com.rail.oculus.teleop streams them relative to the headset, so
+                turning your head moves the "controller" (and a teleoperated robot) even when the hand is still.
             axis_mask: optional 6-element mask [x, y, z, roll, pitch, yaw] (1 =
                 enabled) that zeroes out unwanted pose axes.
             max_pose_age: seconds after which a cached (no longer streaming)
@@ -181,6 +183,7 @@ if __name__ == "__main__":
 
     ap = argparse.ArgumentParser(description="Read Meta Quest controller I/O via VrTeleopDevice")
     ap.add_argument("--hz", type=float, default=30.0)
+    ap.add_argument("--apk", default="com.rail.oculus.teleop.v2", help="teleop app package")
     ap.add_argument(
         "--absolute",
         action="store_true",
@@ -188,7 +191,7 @@ if __name__ == "__main__":
     )
     args = ap.parse_args()
 
-    device = VrTeleopDevice()
+    device = VrTeleopDevice(apk_name=args.apk)
     print("VrTeleopDevice connected. Put on the headset; lines stream when poses go live.")
     dt = 1.0 / args.hz
     ref: npt.NDArray[np.float64] | None = None
