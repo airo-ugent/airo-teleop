@@ -27,6 +27,28 @@ def eprint(*args: Any, **kwargs: Any) -> None:
     sys.stderr.write(RESET)
 
 
+def is_proper_transform(matrix: np.ndarray, tolerance: float = 0.05) -> bool:
+    """True for a finite 4x4 matrix whose rotation block is a proper rotation.
+
+    Rejects NaN/inf entries (comparisons with NaN are False, so they slip
+    through tolerance checks), the all-zero matrix, reflections (det -1) and
+    scaled/sheared blocks: scipy's Rotation.from_matrix raises on several of
+    these, and none of them is a pose. `tolerance` bounds |det - 1| and the
+    entries of R^T R - I (the app logs a few decimals, hence not 1e-6).
+    """
+    matrix = np.asarray(matrix)
+    if matrix.shape != (4, 4) or not np.all(np.isfinite(matrix)):
+        return False
+    rotation = matrix[:3, :3]
+    if abs(np.linalg.det(rotation) - 1.0) > tolerance:
+        return False
+    return bool(np.allclose(rotation.T @ rotation, np.eye(3), atol=tolerance))
+
+
+class TeleopAppNotInstalledError(RuntimeError):
+    """The teleop app is not on the headset and there is no APK to install."""
+
+
 class MetaQuestReader:
     """Meta Quest Reader class with high-level APIs for transforms and button callbacks.
 
@@ -34,6 +56,10 @@ class MetaQuestReader:
     clean APIs to access hand controller transforms in OpenXR and ROS coordinate
     systems, button event callbacks, and analog input values.
     """
+
+    PARSE_ERROR_REPORT_INTERVAL_S = 5.0
+    # the .v2 app keeps the original app's activity class
+    ACTIVITY_CLASS = "com.rail.oculus.teleop.MainActivity"
 
     def __init__(
         self,
@@ -118,6 +144,9 @@ class MetaQuestReader:
         # must gate on pose_stream_age() instead of trusting a non-None
         # pose as "live" (distributed teleop put-on lurch, 2026-11-04).
         self._last_data_ts: float | None = None
+        # malformed lines skipped by the reader thread (see _report_parse_error)
+        self.parse_errors = 0
+        self._last_parse_error_report = -math.inf
 
         self.device = self.get_device()
         self.install(verbose=False)
@@ -130,12 +159,14 @@ class MetaQuestReader:
 
     def run(self) -> None:
         """Start reading data from the Meta Quest device."""
-        self.running = True
-        self.device.shell(
-            # launch the configured package (e.g. the .v2 APK), whose activity class keeps the original name
-            f'am start -n "{self.APK_name}/com.rail.oculus.teleop.MainActivity" '
+        # launch the configured package (e.g. the .v2 APK), whose activity class keeps the original name
+        component = f"{self.APK_name}/{self.ACTIVITY_CLASS}"
+        output = self.device.shell(
+            f'am start -n "{component}" '
             "-a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
         )
+        self._check_am_start_output(output, component)
+        self.running = True
         serial = self.device.serial
         # Two different "-s" flags here, for two different programs:
         #   adb -s <serial>   selects the target device (adb global option).
@@ -165,6 +196,17 @@ class MetaQuestReader:
             daemon=True,
         )
         self.thread.start()
+
+    def _check_am_start_output(self, output: Any, component: str) -> None:
+        """Raise if `am start` could not launch the teleop app (it reports errors on stdout, exit code 0)."""
+        text = output if isinstance(output, str) else ""
+        if "Error" in text or "does not exist" in text:
+            raise RuntimeError(
+                f"Could not start the teleop app {component} on the headset (package '{self.APK_name}'). "
+                "Check that this package is installed (`adb shell pm list packages | grep oculus`) and that "
+                f"apk_name/APK_name is right; its activity class must be {self.ACTIVITY_CLASS}. "
+                f"am start said: {text.strip()}"
+            )
 
     def _read_logcat_subprocess(self, cmd: list[str]) -> None:
         """Read logcat output from adb shell subprocess.
@@ -207,32 +249,13 @@ class MetaQuestReader:
                         continue
                     complete, buffer = buffer.rsplit(b"\n", 1)
                     for raw_line in complete.split(b"\n"):
-                        data = self.extract_data(
-                            raw_line.decode("utf-8", errors="replace").strip()
-                        )
-                        if not data:
-                            continue
-                        transforms, buttons = MetaQuestReader.process_data(data)
-                        with self._lock:
-                            self.last_transforms, self.last_buttons = (
-                                transforms,
-                                buttons,
-                            )
-
-                        if transforms is not None:
-                            # data-flow freshness stamp (see _last_data_ts in
-                            # __init__): pose lines ONLY — [cam] diagnostics
-                            # parse to transforms=None and must not keep a
-                            # dead pose looking alive.
-                            self._last_data_ts = time.monotonic()
-                            for key, matrix in transforms.items():
-                                validated = self._validate_transform(matrix)
-                                if validated is not None:
-                                    self._latest_transforms[key] = validated
-
-                        if buttons is not None:
-                            self._latest_buttons = buttons
-                            self._handle_button_events(buttons)
+                        # one malformed line (truncated write, non-numeric
+                        # token, a raising button callback) must not kill the
+                        # reader thread: count it, report rate-limited, skip it
+                        try:
+                            self._handle_line(raw_line)
+                        except Exception as e:  # noqa: BLE001
+                            self._report_parse_error(raw_line, e)
                 proc.terminate()
                 proc.wait(timeout=5)
         except FileNotFoundError:
@@ -243,6 +266,55 @@ class MetaQuestReader:
             eprint(f"⚠️ Failed to start adb logcat subprocess: {e}")
         except subprocess.SubprocessError as e:
             eprint(f"⚠️ adb subprocess error: {e}")
+
+    def _handle_line(self, raw_line: bytes) -> None:
+        """Parse one logcat line and update the caches (raises on malformed data)."""
+        data = self.extract_data(raw_line.decode("utf-8", errors="replace").strip())
+        if not data:
+            return
+        transforms, buttons = MetaQuestReader.process_data(data)
+        with self._lock:
+            self.last_transforms, self.last_buttons = (
+                transforms,
+                buttons,
+            )
+
+        if transforms is not None:
+            # data-flow freshness stamp (see _last_data_ts in
+            # __init__): pose lines ONLY — [cam] diagnostics
+            # parse to transforms=None and must not keep a
+            # dead pose looking alive.
+            self._last_data_ts = time.monotonic()
+            for key, matrix in transforms.items():
+                validated = self._validate_transform(matrix)
+                if validated is not None:
+                    self._latest_transforms[key] = validated
+
+        if buttons is not None:
+            self._latest_buttons = buttons
+            self._handle_button_events(buttons)
+
+    def _report_parse_error(self, raw_line: bytes, error: Exception) -> None:
+        """Count a skipped line; print at most one message per PARSE_ERROR_REPORT_INTERVAL_S."""
+        self.parse_errors += 1
+        now = time.monotonic()
+        if now - self._last_parse_error_report >= self.PARSE_ERROR_REPORT_INTERVAL_S:
+            self._last_parse_error_report = now
+            eprint(
+                f"⚠️ Skipped malformed logcat line ({self.parse_errors} so far): "
+                f"{type(error).__name__}: {error}; line: {raw_line[:120]!r}"
+            )
+
+    @property
+    def thread_alive(self) -> bool:
+        """True while the logcat reader thread is running.
+
+        False before run(), after stop(), and when the thread has died (adb
+        exited, the subprocess could not be started): then no new poses will
+        ever arrive, whatever the caches still hold.
+        """
+        thread = getattr(self, "thread", None)
+        return bool(self.running and thread is not None and thread.is_alive())
 
     def stop(self) -> None:
         """Stop reading data from the Meta Quest device."""
@@ -360,7 +432,7 @@ class MetaQuestReader:
                 # airo-teleop does not bundle the APK: fail with instructions
                 # instead of a bare FileNotFoundError from ppadb.
                 if not os.path.exists(APK_path):
-                    raise RuntimeError(
+                    raise TeleopAppNotInstalledError(
                         f"Teleop app '{self.APK_name}' is not installed on the headset "
                         f"and no APK was found at '{APK_path}'. Install it manually "
                         "(e.g. `adb install teleop-pointer-frame-relative.apk` from the "
@@ -374,6 +446,8 @@ class MetaQuestReader:
                     eprint("APK install failed.")
             elif verbose:
                 print("APK is already installed.")
+        except TeleopAppNotInstalledError:
+            raise  # a RuntimeError too, but not an access problem: keep its message
         except RuntimeError:
             eprint("Device is visible but could not be accessed.")
             eprint(
@@ -485,13 +559,12 @@ class MetaQuestReader:
         Returns:
             Extracted data.
         """
-        output = ""
-        if self.tag in line:
-            try:
-                output += line.split(self.tag + ": ")[1]
-            except ValueError as e:
-                eprint(f"⚠️ Failed to extract data from logcat line: {e}")
-        return output
+        # partition, not split()[1]: a line that ends right after the tag (no
+        # ": " separator) yields "" instead of raising IndexError
+        if self.tag not in line:
+            return ""
+        _, separator, output = line.partition(self.tag + ": ")
+        return output if separator else ""
 
     def get_transformations_and_buttons(
         self,
@@ -718,14 +791,7 @@ class MetaQuestReader:
         Returns:
             The same matrix if valid, None if invalid
         """
-        if np.allclose(matrix, 0.0):
-            return None
-
-        det = np.linalg.det(matrix[:3, :3])
-        if abs(abs(det) - 1.0) > 0.1:
-            return None
-
-        return matrix
+        return matrix if is_proper_transform(matrix) else None
 
     def _normalize_hand_key(self, hand: Literal["left", "right", "l", "r"]) -> str:
         """Normalize hand identifier to 'l' or 'r'.

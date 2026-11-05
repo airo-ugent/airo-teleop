@@ -7,6 +7,6 @@ the teleop APK installed on it.
 """
 
 from airo_teleop_vr.buttons_parser import parse_buttons
-from airo_teleop_vr.reader import MetaQuestReader
+from airo_teleop_vr.reader import MetaQuestReader, TeleopAppNotInstalledError, is_proper_transform
 
-__all__ = ["MetaQuestReader", "parse_buttons"]
+__all__ = ["MetaQuestReader", "TeleopAppNotInstalledError", "is_proper_transform", "parse_buttons"]
