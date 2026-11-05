@@ -25,6 +25,7 @@ import time
 from typing import Callable, Literal, Sequence, Tuple
 
 import numpy as np
+from loguru import logger
 from airo_robots.grippers.parallel_position_gripper import ParallelPositionGripper
 from airo_robots.manipulators.position_manipulator import PositionManipulator
 from airo_typing import HomogeneousMatrixType
@@ -66,10 +67,13 @@ class VrClutchMapper:
 
     Kept separate so it can be unit tested with synthetic raw states."""
 
+    # while disengaged, a measured TCP pose more than this many step limits from the held command replaces it
+    REBASE_FACTOR = 2.0
+
     def __init__(
         self,
         hand: Literal["right", "left"] = "right",
-        operator_forward_axis: str | float = "-y",
+        operator_forward_axis: str | float = "+x",
         translation_scale: float = 1.0,
         rotation_scale: float = 1.0,
         grip_engage: float = 0.6,
@@ -116,6 +120,7 @@ class VrClutchMapper:
         self._tcp_reference: HomogeneousMatrixType | None = None
         self._last_command: HomogeneousMatrixType | None = None
         self.precision = False
+        self._rebase_warned = False
 
     def controller_pose(self, raw_state: np.ndarray) -> HomogeneousMatrixType | None:
         """This hand's controller pose (headset frame), or None if the device has no valid pose for it."""
@@ -131,9 +136,15 @@ class VrClutchMapper:
         return pose
 
     def grip(self, raw_state: np.ndarray) -> float:
+        """This hand's grip value, 0 for a raw state too short to be the device's 27-dim layout."""
+        if raw_state.shape[0] <= _ENABLED_INDEX:
+            return 0.0
         return float(raw_state[_GRIP_INDEX[self.hand]])
 
     def trigger(self, raw_state: np.ndarray) -> float:
+        """This hand's trigger value in [0, 1], 0 for a raw state too short to be the device's 27-dim layout."""
+        if raw_state.shape[0] <= _ENABLED_INDEX:
+            return 0.0
         return float(np.clip(raw_state[_TRIGGER_INDEX[self.hand]], 0.0, 1.0))
 
     def __call__(
@@ -151,12 +162,14 @@ class VrClutchMapper:
 
         if not engaged:
             self.engaged = False
+            self._rebase_if_moved_away(current_tcp_pose)
             return self._last_command.copy()
 
         rising_edge = not self.engaged
         if rising_edge:
             self.engaged = True
             self.ever_engaged = True
+            self._rebase_warned = False
             self._engage_time = now
         if rising_edge or now - self._engage_time < self.enable_settle_time_s:
             self.precision = self._precision_held(raw_state)
@@ -176,6 +189,30 @@ class VrClutchMapper:
         desired = self._map(controller)
         self._last_command = self._clamp_step(self._last_command, desired)
         return self._last_command.copy()
+
+    def _rebase_if_moved_away(self, current_tcp_pose: HomogeneousMatrixType) -> None:
+        """While disengaged: if the arm is far from the held command, hold where it is instead.
+
+        Something else moved the arm (another controller, freedrive, a protective stop) without reset(): holding the
+        old command would make the next action jump back to it. "Far" is more than REBASE_FACTOR step limits (which
+        the robot never lags by in normal tracking); a step limit of 0 (no limit) disables that half of the check.
+        """
+        assert self._last_command is not None
+        measured = np.asarray(current_tcp_pose, dtype=np.float64)
+        distance = float(np.linalg.norm(measured[:3, 3] - self._last_command[:3, 3]))
+        angle = float(np.linalg.norm(Rotation.from_matrix(measured[:3, :3] @ self._last_command[:3, :3].T).as_rotvec()))
+        too_far = (self.max_translation_step_m > 0 and distance > self.REBASE_FACTOR * self.max_translation_step_m) or (
+            self.max_rotation_step_rad > 0 and angle > self.REBASE_FACTOR * self.max_rotation_step_rad
+        )
+        if not too_far:
+            return
+        if not self._rebase_warned:
+            logger.warning(
+                f"VR teleop ({self.hand} hand): the arm is {distance * 100:.1f} cm / {np.degrees(angle):.0f} deg away "
+                "from the held command (moved by something else?); holding its measured pose instead"
+            )
+            self._rebase_warned = True
+        self._last_command = measured.copy()
 
     def _precision_held(self, raw_state: np.ndarray) -> bool:
         """Precision mode: the trigger is held (with hysteresis); always False if precision_scale is None."""
@@ -248,7 +285,8 @@ class Vr4PositionManipulator(TeleopAgent):
             scaled by this on top of the scales above (pressing/releasing it mid-stroke does not move the robot);
             None disables it
         :param vr_device: an existing VrTeleopDevice (e.g. shared between two arms); else one is created with
-            `vr_device_kwargs` (ip_address, port, apk_name, max_pose_age, ...)
+            `vr_device_kwargs` (ip_address, port, apk_name, max_pose_age, max_frozen_s, ...). close() only closes a
+            device the agent created, so the caller closes a device it passed in
         """
         self.position_manipulator = position_manipulator
         self.mapper = VrClutchMapper(
@@ -262,6 +300,8 @@ class Vr4PositionManipulator(TeleopAgent):
             enabled_axes=enabled_axes,
             precision_scale=precision_scale,
         )
+        # close() only closes a device this agent created: a passed-in one may be shared (e.g. between two arms)
+        self._owns_device = vr_device is None
         device = vr_device if vr_device is not None else VrTeleopDevice(**vr_device_kwargs)
         super().__init__(teleop_device=device, transform_func=self._build_transform_func())
 
@@ -275,7 +315,9 @@ class Vr4PositionManipulator(TeleopAgent):
         self.mapper.reset()
 
     def close(self) -> None:
-        self.teleop_device.close()
+        """Close the VR device if this agent created it; a device passed in as `vr_device` is the caller's."""
+        if self._owns_device:
+            self.teleop_device.close()
 
 
 class Vr4PositionManipulator_ParallelGripper(Vr4PositionManipulator):
@@ -310,6 +352,9 @@ class Vr4PositionManipulator_ParallelGripper(Vr4PositionManipulator):
             raise ValueError("gripper_mode must be 'buttons', 'analog' or 'binary'")
         if gripper_mode == "buttons" and gripper_step_m <= 0:
             raise ValueError("gripper_step_m must be positive")
+        if gripper_mode == "buttons" and gripper_max_lead_m <= 0:
+            # with a lead <= 0 the target can never move past the fingers: the buttons would silently do nothing
+            raise ValueError("gripper_max_lead_m must be positive")
         self.gripper = gripper
         self.gripper_mode = gripper_mode
         self.gripper_step_m = gripper_step_m
