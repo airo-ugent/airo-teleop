@@ -24,6 +24,7 @@ class Phone4PositionManipulator(TeleopAgent):
         max_rotation_step_rad: float = 0.35,
         enabled_axes: Sequence[bool] | None = None,
         auto_connect: bool = True,
+        precision_scale: float | None = 0.25,
     ) -> None:
         """
         Teleop agent that maps a phone's calibrated pose to a PositionManipulator TCP pose.
@@ -38,7 +39,13 @@ class Phone4PositionManipulator(TeleopAgent):
         :param max_rotation_step_rad: Max rotation step per update in radians
         :param enabled_axes: Boolean array for enabling xyz and rpy axes
         :param auto_connect: If True, connect and calibrate during initialization
+        :param precision_scale: precision ("sniper") mode: while the web UI's "precision" toggle is on (Android; the
+            right controller's button 0 on a WebXR VR device), translation and rotation are scaled by this factor too.
+            Switching it restarts the stroke from the last command, so the switch itself does not move the robot.
+            None disables precision mode.
         """
+        if precision_scale is not None and not 0.0 < precision_scale <= 1.0:
+            raise ValueError("precision_scale must be in (0, 1], or None to disable precision mode")
         self.position_manipulator = position_manipulator
         self.translation_scale = translation_scale
         self.rotation_scale = rotation_scale
@@ -47,6 +54,8 @@ class Phone4PositionManipulator(TeleopAgent):
         self.enable_settle_time_s = enable_settle_time_s
         self.max_translation_step_m = max_translation_step_m
         self.max_rotation_step_rad = max_rotation_step_rad
+        self.precision_scale = precision_scale
+        self.precision = False
 
         warnings.warn(
             "Do not cover the phone camera with your fingers during teleop/calibration.",
@@ -60,6 +69,10 @@ class Phone4PositionManipulator(TeleopAgent):
         self._prev_enabled = False
         self._enable_time_s: float | None = None
         self._last_command_pose: HomogeneousMatrixType | None = None
+        # the phone pose (calibrated, see PhoneTeleopDevice) the current stroke is measured from: zero on enable,
+        # re-taken when precision mode is switched
+        self._phone_reference_pos = np.zeros(3)
+        self._phone_reference_rot = Rotation.from_rotvec(np.zeros(3))
 
         phone_device = PhoneTeleopDevice(phone_config=phone_config, auto_connect=auto_connect)
         super().__init__(teleop_device=phone_device, transform_func=self._build_transform_func())
@@ -85,9 +98,25 @@ class Phone4PositionManipulator(TeleopAgent):
                 if not self._prev_enabled:
                     self._enable_time_s = time.monotonic()
                     self._last_command_pose = ref_pose.copy()
-              
-                mapped_translation = (self._translation_map @ pos) * self.translation_scale
-                mapped_rotvec = (self._rotation_map @ rotvec) * self.rotation_scale
+                    # the phone is re-calibrated on enable: its pose is measured from zero again
+                    self._phone_reference_pos = np.zeros(3)
+                    self._phone_reference_rot = Rotation.from_rotvec(np.zeros(3))
+                    self.precision = self._precision_on()
+
+                precision = self._precision_on()
+                if precision != self.precision:
+                    # the scale changes: restart the stroke from here, so the switch itself does not move the robot
+                    self._reference_pose = self._last_command_pose.copy()
+                    ref_pose = self._reference_pose
+                    self._phone_reference_pos = pos.copy()
+                    self._phone_reference_rot = Rotation.from_rotvec(rotvec)
+                    self.precision = precision
+
+                factor = self.precision_scale if (self.precision and self.precision_scale is not None) else 1.0
+                stroke_pos = pos - self._phone_reference_pos
+                stroke_rotvec = (Rotation.from_rotvec(rotvec) * self._phone_reference_rot.inv()).as_rotvec()
+                mapped_translation = (self._translation_map @ stroke_pos) * self.translation_scale * factor
+                mapped_rotvec = (self._rotation_map @ stroke_rotvec) * self.rotation_scale * factor
 
                 delta_rot = Rotation.from_rotvec(mapped_rotvec).as_matrix()
                 desired = np.eye(4, dtype=float)
@@ -183,6 +212,13 @@ class Phone4PositionManipulator(TeleopAgent):
         translation_map = yaw_rot @ translation_map_base
         rotation_map = yaw_rot @ rotation_map_base
         return translation_map, rotation_map
+
+    def _precision_on(self) -> bool:
+        """Precision mode: the web UI's toggle is on; always False if precision_scale is None."""
+        if self.precision_scale is None:
+            return False
+        raw_inputs = getattr(self.teleop_device, "last_raw_inputs", None) or {}
+        return bool(raw_inputs.get("precision", False))
 
     def get_enabled_axes(self) -> list[bool]:
         return self.enabled_axes
