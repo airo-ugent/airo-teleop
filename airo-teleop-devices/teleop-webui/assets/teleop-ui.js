@@ -162,7 +162,9 @@ class TeleopUI extends HTMLElement {
                 }
                 
                 .reserved-button {
-                    width: 50px;
+                    /* labelled with their gripper function: A = close, B = open (PhoneGripperAgent) */
+                    min-width: 64px;
+                    padding: 0 6px;
                     height: 50px;
                     background: #333;
                     border: 2px solid #555;
@@ -286,8 +288,8 @@ class TeleopUI extends HTMLElement {
                 </div>
 
                 <div class="reserved-section">
-                    <div class="reserved-button" id="reservedButtonA">A</div>
-                    <div class="reserved-button" id="reservedButtonB">B</div>
+                    <div class="reserved-button" id="reservedButtonA">close</div>
+                    <div class="reserved-button" id="reservedButtonB">open</div>
                 </div>
                 </div>
 
