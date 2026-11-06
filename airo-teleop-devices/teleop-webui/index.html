@@ -105,7 +105,7 @@
     <script>
         class TeleopJoystick {
             constructor() {
-                this.gripper = 'open';
+                this.precision = false;
                 this.moveButtonPressed = false;
                 this.reservedButtonA = false;
                 this.reservedButtonB = false;
@@ -124,7 +124,7 @@
                         }
 
                         if (gamepad.buttons[0] && gamepad.buttons[0].pressed && !gamepad.buttons[0].wasPressed) {
-                            this.gripper = (this.gripper === 'open') ? 'close' : 'open';
+                            this.precision = !this.precision;
                         }
                         gamepad.buttons[0].wasPressed = gamepad.buttons[0].pressed;
 
@@ -143,8 +143,8 @@
                 return this.moveButtonPressed;
             }
 
-            isGripperEngaged() {
-                return this.gripper === 'close';
+            isPrecisionEnabled() {
+                return this.precision;
             }
 
             isReservedButtonAActive() {
@@ -369,7 +369,7 @@
                                             w: orientation.w
                                         },
                                         move: teleopFrontEnd.isMotionEnabled(),
-                                        gripper: teleopFrontEnd.isGripperEngaged() ? 'close' : 'open',
+                                        precision: teleopFrontEnd.isPrecisionEnabled(),
                                         fps: fps,
                                         scale: teleopFrontEnd.getScale(),
                                         reservedButtonA: teleopFrontEnd.isReservedButtonAActive(),

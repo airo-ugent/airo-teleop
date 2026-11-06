@@ -274,3 +274,101 @@ def test_precision_mode_off_when_disabled_or_the_trigger_drives_the_gripper():
         Vr4PositionManipulator_ParallelGripper(
             _FakeRobot(), _FakeGripper(), gripper_mode="binary", precision_scale=0.25, vr_device=_FakeDevice()
         )
+
+
+def test_mapper_default_forward_axis_matches_the_agents():
+    np.testing.assert_allclose(VrClutchMapper().vr_to_base, forward_axis_to_rotation("+x"))
+
+
+@pytest.mark.parametrize(
+    "rotvec_vr, rotvec_base",
+    [
+        ((0.0, 0.0, 0.3), (0.0, 0.0, 0.3)),  # yaw about the vertical: the same yaw in the base frame
+        ((0.2, 0.0, 0.0), (0.0, 0.2, 0.0)),  # roll about the headset's forward (x) = about the base's +y
+        ((0.0, 0.2, 0.0), (-0.2, 0.0, 0.0)),  # pitch about the headset's left (y) = about the base's -x
+    ],
+)
+def test_rotation_is_conjugated_into_the_base_frame_for_a_rotated_forward_axis(rotvec_vr, rotvec_base):
+    m = mapper(operator_forward_axis="+y")  # the headset's forward is the base's +y, its left the base's -x
+    m(raw_state(rotvec=(0.0, 0.0, 0.0)), TCP, now=0.0)
+    target = m(raw_state(rotvec=rotvec_vr), TCP, now=0.1)
+    expected = Rotation.from_rotvec(rotvec_base).as_matrix() @ TCP[:3, :3]
+    np.testing.assert_allclose(target[:3, :3], expected, atol=1e-12)
+    np.testing.assert_allclose(target[:3, 3], TCP[:3, 3], atol=1e-12)
+    # and from a non-identity controller reference: only the rotation since the reference counts
+    start = Rotation.from_rotvec([0.1, -0.4, 0.7])
+    m = mapper(operator_forward_axis="+y")
+    m(raw_state(rotvec=start.as_rotvec()), TCP, now=0.0)
+    moved = Rotation.from_rotvec(rotvec_vr) * start  # rotated about the headset-frame axes
+    target = m(raw_state(rotvec=moved.as_rotvec()), TCP, now=0.1)
+    np.testing.assert_allclose(target[:3, :3], expected, atol=1e-12)
+
+
+def test_stale_hold_rebases_to_the_measured_pose_when_the_arm_was_moved_away():
+    m = mapper(max_translation_step_m=0.03, max_rotation_step_rad=0.3)
+    m(raw_state(position=(0.0, 0.0, 1.0)), TCP, now=0.0)
+    commanded = m(raw_state(position=(0.02, 0.0, 1.0)), TCP, now=0.1)
+    # released, the robot lags a little behind the command: the command is held (normal case unchanged)
+    near = TCP.copy()
+    near[0, 3] += 0.015
+    np.testing.assert_allclose(m(raw_state(grip=0.0), near, now=0.2), commanded)
+    # something else moved the arm 20 cm away: hold where it is, not the old command
+    moved = TCP.copy()
+    moved[:3, 3] += [0.0, 0.2, 0.0]
+    np.testing.assert_allclose(m(raw_state(grip=0.0), moved, now=0.3), moved)
+    np.testing.assert_allclose(m(raw_state(grip=0.0), moved, now=0.4), moved)
+    # rotated away (translation unchanged) also re-bases
+    turned = moved.copy()
+    turned[:3, :3] = Rotation.from_rotvec([0.0, 0.0, 0.8]).as_matrix() @ moved[:3, :3]
+    np.testing.assert_allclose(m(raw_state(grip=0.0), turned, now=0.5), turned)
+
+
+def test_stale_hold_without_step_limits_keeps_the_command():
+    m = mapper()  # step limits 0 = unlimited: no scale to judge "far" by, keep the held command
+    m(raw_state(position=(0.0, 0.0, 1.0)), TCP, now=0.0)
+    commanded = m(raw_state(position=(0.3, 0.0, 1.0)), TCP, now=0.1)
+    np.testing.assert_allclose(m(raw_state(grip=0.0), TCP, now=0.2), commanded)
+
+
+def test_short_raw_state_reads_as_released():
+    m = mapper()
+    assert m.grip(np.zeros(14)) == 0.0 and m.trigger(np.zeros(14)) == 0.0
+    np.testing.assert_allclose(m(np.ones(14), TCP, now=0.0), TCP)
+
+
+def test_buttons_mode_needs_a_positive_max_lead():
+    for lead in (0.0, -0.001):
+        with pytest.raises(ValueError, match="gripper_max_lead_m"):
+            Vr4PositionManipulator_ParallelGripper(
+                _FakeRobot(), _FakeGripper(), gripper_max_lead_m=lead, vr_device=_FakeDevice()
+            )
+    # the trigger modes do not use it
+    Vr4PositionManipulator_ParallelGripper(
+        _FakeRobot(), _FakeGripper(), gripper_mode="analog", gripper_max_lead_m=0.0, vr_device=_FakeDevice()
+    )
+
+
+class _CountingDevice(_FakeDevice):
+    closed = 0
+
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.kwargs = kwargs
+
+    def close(self):
+        type(self).closed += 1
+
+
+def test_close_only_closes_a_device_the_agent_created(monkeypatch):
+    import airo_teleop_agents.vr_teleop_agents as vr_agents
+
+    shared = _CountingDevice()
+    agent = Vr4PositionManipulator_ParallelGripper(_FakeRobot(), _FakeGripper(), vr_device=shared)
+    agent.close()
+    assert _CountingDevice.closed == 0  # the caller's device, e.g. shared by two arms
+
+    monkeypatch.setattr(vr_agents, "VrTeleopDevice", _CountingDevice)
+    agent = Vr4PositionManipulator_ParallelGripper(_FakeRobot(), _FakeGripper(), max_pose_age=0.3)
+    assert agent.teleop_device.kwargs == {"max_pose_age": 0.3}
+    agent.close()
+    assert _CountingDevice.closed == 1

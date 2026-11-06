@@ -256,6 +256,7 @@ class AndroidPhone(_PhoneBase):
         raw_inputs: dict[str, float | int | bool] = {
             "move": bool(msg.get("move", False)),
             "scale": float(msg.get("scale", 1.0)),
+            "precision": bool(msg.get("precision", False)),
             "reservedButtonA": bool(msg.get("reservedButtonA", False)),
             "reservedButtonB": bool(msg.get("reservedButtonB", False)),
             "startRecording": bool(msg.get("startRecording", False)),

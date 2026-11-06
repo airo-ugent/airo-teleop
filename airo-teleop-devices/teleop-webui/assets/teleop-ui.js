@@ -5,7 +5,7 @@ class TeleopUI extends HTMLElement {
 
         // State
         this.sliderValue = 1.0;
-        this.gripperEngaged = false;
+        this.precisionEnabled = false;
         this.motionEnabled = false;
         this.reservedButtonAActive = false;
         this.reservedButtonBActive = false;
@@ -135,13 +135,13 @@ class TeleopUI extends HTMLElement {
                     border-radius: 6px;
                 }
                 
-                .gripper-button {
-                    background:rgb(174, 255, 193);
+                .precision-button {
+                    background: #fff;
                     color: black;
                 }
                 
-                .gripper-button.engaged {
-                    background: rgb(255, 174, 174);
+                .precision-button.on {
+                    background: rgb(255, 214, 120);
                 }
                 
                 .motion-button {
@@ -162,7 +162,9 @@ class TeleopUI extends HTMLElement {
                 }
                 
                 .reserved-button {
-                    width: 50px;
+                    /* labelled with their gripper function: A = close, B = open (PhoneGripperAgent) */
+                    min-width: 64px;
+                    padding: 0 6px;
                     height: 50px;
                     background: #333;
                     border: 2px solid #555;
@@ -286,8 +288,8 @@ class TeleopUI extends HTMLElement {
                 </div>
 
                 <div class="reserved-section">
-                    <div class="reserved-button" id="reservedButtonA">A</div>
-                    <div class="reserved-button" id="reservedButtonB">B</div>
+                    <div class="reserved-button" id="reservedButtonA">close</div>
+                    <div class="reserved-button" id="reservedButtonB">open</div>
                 </div>
                 </div>
 
@@ -305,8 +307,8 @@ class TeleopUI extends HTMLElement {
                 </div>
 
                 <div class="controls">
-                    <button class="control-button gripper-button" id="gripperButton">
-                        gripper disengaged
+                    <button class="control-button precision-button" id="precisionButton">
+                        precision off
                     </button>
                     
                     <button class="control-button motion-button" id="motionButton">
@@ -320,7 +322,7 @@ class TeleopUI extends HTMLElement {
     setupEventListeners() {
         const exitButton = this.shadowRoot.getElementById('exitButton');
         const scaleSlider = this.shadowRoot.getElementById('scaleSlider');
-        const gripperButton = this.shadowRoot.getElementById('gripperButton');
+        const precisionButton = this.shadowRoot.getElementById('precisionButton');
         const motionButton = this.shadowRoot.getElementById('motionButton');
         const reservedButtonA = this.shadowRoot.getElementById('reservedButtonA');
         const reservedButtonB = this.shadowRoot.getElementById('reservedButtonB');
@@ -344,18 +346,14 @@ class TeleopUI extends HTMLElement {
             }));
         });
 
-        // Gripper button
-        gripperButton.addEventListener('click', () => {
-            this.gripperEngaged = !this.gripperEngaged;
-            gripperButton.textContent = `Gripper ${this.gripperEngaged ? 'Engaged' : 'Disengaged'}`;
-            if (this.gripperEngaged) {
-                gripperButton.classList.add('engaged');
-            } else {
-                gripperButton.classList.remove('engaged');
-            }
+        // Precision ("sniper") mode toggle: the robot side scales the motion down while it is on
+        precisionButton.addEventListener('click', () => {
+            this.precisionEnabled = !this.precisionEnabled;
+            precisionButton.textContent = `precision ${this.precisionEnabled ? 'on' : 'off'}`;
+            precisionButton.classList.toggle('on', this.precisionEnabled);
 
-            this.dispatchEvent(new CustomEvent('gripperchange', {
-                detail: { engaged: this.gripperEngaged }
+            this.dispatchEvent(new CustomEvent('precisionchange', {
+                detail: { enabled: this.precisionEnabled }
             }));
         });
 
@@ -527,8 +525,8 @@ class TeleopUI extends HTMLElement {
         return this.sliderValue;
     }
 
-    isGripperEngaged() {
-        return this.gripperEngaged;
+    isPrecisionEnabled() {
+        return this.precisionEnabled;
     }
 
     isMotionEnabled() {
